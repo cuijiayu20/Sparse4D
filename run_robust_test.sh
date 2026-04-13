@@ -82,6 +82,10 @@ run_test() {
     fi
 
     echo "[DONE] ${result_name}"
+    
+    # 每跑完一个实验立刻汇总生成/更新一遍 CSV，这样随时可以查看已有进度
+    python collect_robust_results.py --result-dir ${RESULT_DIR}
+    
     echo ""
 }
 
