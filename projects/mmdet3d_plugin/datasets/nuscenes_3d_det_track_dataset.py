@@ -135,6 +135,15 @@ class NuScenes3DDetTrackDataset(Custom3DDataset):
         sequences_split_num=1,
         with_seq_flag=False,
         keep_consistent_seq_aug=True,
+        # ===== Robustness test parameters =====
+        noise_nuscenes_ann_file='',
+        extrinsics_noise=False,
+        extrinsics_noise_type='single',
+        extrinsics_noise_level=None,
+        drop_frames=False,
+        drop_ratio=0,
+        drop_type='discrete',
+        noise_sensor_type='camera',
     ):
         self.version = version
         self.load_interval = load_interval
@@ -184,6 +193,33 @@ class NuScenes3DDetTrackDataset(Custom3DDataset):
         self.last_id = None
         if with_seq_flag:
             self._set_sequence_group_flag()
+
+        # ===== Robustness test initialization =====
+        self.extrinsics_noise = extrinsics_noise
+        self.extrinsics_noise_type = extrinsics_noise_type
+        self.extrinsics_noise_level = extrinsics_noise_level
+        self.drop_frames = drop_frames
+        self.drop_ratio = drop_ratio
+        self.drop_type = drop_type
+        self.noise_sensor_type = noise_sensor_type
+
+        self.noise_camera_data = None
+        self.noise_lidar_data = None
+        if (self.extrinsics_noise or self.drop_frames) and noise_nuscenes_ann_file:
+            print(f'[Robust] Loading noise data from {noise_nuscenes_ann_file}')
+            noise_data = mmcv.load(noise_nuscenes_ann_file, file_format='pkl')
+            self.noise_camera_data = noise_data.get('camera', None)
+            self.noise_lidar_data = noise_data.get('lidar', None)
+            print('[Robust] Noise data loaded successfully.')
+
+        # Print noise settings
+        if self.drop_frames:
+            print(f'[Robust] Frame drop: ratio={self.drop_ratio}%, '
+                  f'type={self.drop_type}, sensor={self.noise_sensor_type}')
+        if self.extrinsics_noise:
+            level_str = self.extrinsics_noise_level or 'default'
+            print(f'[Robust] Extrinsic noise: type={self.extrinsics_noise_type}, '
+                  f'level={level_str}')
 
     def _set_sequence_group_flag(self):
         """
@@ -518,11 +554,54 @@ class NuScenes3DDetTrackDataset(Custom3DDataset):
             lidar2img_rts = []
             cam_intrinsic = []
             for cam_type, cam_info in info["cams"].items():
-                image_paths.append(cam_info["data_path"])
+                cam_data_path = cam_info["data_path"]
+                cam_file_name = cam_data_path.split('/')[-1]
+
+                # ===== Frame drop: replace stuck camera images =====
+                if self.drop_frames and self.noise_camera_data is not None:
+                    if cam_file_name in self.noise_camera_data:
+                        drop_info = self.noise_camera_data[cam_file_name].get(
+                            'noise', {}).get('drop_frames', {})
+                        if self.drop_ratio in drop_info:
+                            frame_drop = drop_info[self.drop_ratio]
+                            if self.drop_type in frame_drop:
+                                if frame_drop[self.drop_type]['stuck']:
+                                    replace_file = frame_drop[self.drop_type]['replace']
+                                    if replace_file:
+                                        cam_data_path = cam_data_path.replace(
+                                            cam_file_name, replace_file)
+
+                image_paths.append(cam_data_path)
+
+                # ===== Extrinsic noise: replace sensor2lidar transforms =====
+                if self.extrinsics_noise and self.noise_camera_data is not None:
+                    if cam_file_name in self.noise_camera_data:
+                        ext_noise = self.noise_camera_data[cam_file_name].get(
+                            'noise', {}).get('extrinsics_noise', {})
+                        # Build noise key: e.g. 'L1_single', 'L3_all', or 'single', 'all'
+                        if self.extrinsics_noise_level:
+                            noise_key = f'{self.extrinsics_noise_level}_{self.extrinsics_noise_type}'
+                        else:
+                            noise_key = self.extrinsics_noise_type
+                        rot_key = f'{noise_key}_noise_sensor2lidar_rotation'
+                        trans_key = f'{noise_key}_noise_sensor2lidar_translation'
+                        if rot_key in ext_noise and trans_key in ext_noise:
+                            sensor2lidar_rotation = ext_noise[rot_key]
+                            sensor2lidar_translation = ext_noise[trans_key]
+                        else:
+                            sensor2lidar_rotation = cam_info["sensor2lidar_rotation"]
+                            sensor2lidar_translation = cam_info["sensor2lidar_translation"]
+                    else:
+                        sensor2lidar_rotation = cam_info["sensor2lidar_rotation"]
+                        sensor2lidar_translation = cam_info["sensor2lidar_translation"]
+                else:
+                    sensor2lidar_rotation = cam_info["sensor2lidar_rotation"]
+                    sensor2lidar_translation = cam_info["sensor2lidar_translation"]
+
                 # obtain lidar to image transformation matrix
-                lidar2cam_r = np.linalg.inv(cam_info["sensor2lidar_rotation"])
+                lidar2cam_r = np.linalg.inv(sensor2lidar_rotation)
                 lidar2cam_t = (
-                    cam_info["sensor2lidar_translation"] @ lidar2cam_r.T
+                    sensor2lidar_translation @ lidar2cam_r.T
                 )
                 lidar2cam_rt = np.eye(4)
                 lidar2cam_rt[:3, :3] = lidar2cam_r.T

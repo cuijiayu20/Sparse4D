@@ -1,4 +1,5 @@
 import time
+import os
 import torch
 
 import numpy as np
@@ -617,3 +618,78 @@ class CustomResizeMultiViewImage(object):
         results["img_shape"] = [img.shape for img in results["img"]]
         results["lidar2img"] = resize_lidar2img
         return results
+
+
+@PIPELINES.register_module()
+class LoadMaskMultiViewImage(object):
+    """Apply occlusion masks to multi-view images for robustness testing.
+
+    This pipeline applies mud/occlusion masks to camera images to simulate
+    lens occlusion scenarios. The severity is controlled by the alpha power.
+
+    Args:
+        noise_nuscenes_ann_file (str): Path to the noise pkl file containing
+            mask assignments per camera.
+        mask_file (str): Path to the directory containing mask images
+            (mask_1.jpg, mask_2.jpg, ..., mask_16.jpg).
+        occlusion_level (int): Controls occlusion severity via alpha power.
+            exp1 (power=1): S1 轻微遮挡 (light)
+            exp2 (power=2): S2 中等遮挡 (medium)
+            exp3 (power=3): S3 严重遮挡 (heavy)
+            exp5 (power=5): S4 极端遮挡 (extreme)
+    """
+
+    def __init__(self, noise_nuscenes_ann_file, mask_file, occlusion_level=3):
+        noise_data = mmcv.load(noise_nuscenes_ann_file, file_format='pkl')
+        self.noise_camera_data = noise_data['camera']
+        self.mask_file = mask_file
+        self.occlusion_level = occlusion_level
+        print(f'[Robust] Occlusion mask pipeline: level={occlusion_level}, '
+              f'mask_dir={mask_file}')
+
+    def put_mask_on_img(self, img, mask):
+        """Apply occlusion mask to an image.
+
+        Args:
+            img (np.ndarray): Input image (H, W, C), float32.
+            mask (np.ndarray): Mask image (H_m, W_m, C), uint8.
+
+        Returns:
+            np.ndarray: Image with mask applied.
+        """
+        h, w = img.shape[:2]
+        mask = np.rot90(mask)
+        mask = mmcv.imresize(mask, (w, h), return_scale=False)
+        mask_float = mask.astype(np.float32)
+        alpha = mask_float / 255.0
+        alpha = np.power(alpha, self.occlusion_level)
+        img_with_mask = alpha * img + (1 - alpha) * mask_float
+        return img_with_mask.astype(np.float32)
+
+    def __call__(self, results):
+        imgs = results['img']
+        filenames = results.get('img_filename', results.get('filename', []))
+        new_imgs = []
+
+        for i, img in enumerate(imgs):
+            if i < len(filenames):
+                noise_index = filenames[i].split('/')[-1]
+                if noise_index in self.noise_camera_data:
+                    mask_info = self.noise_camera_data[noise_index].get(
+                        'noise', {}).get('mask_noise', {})
+                    mask_id = mask_info.get('mask_id', None)
+                    if mask_id is not None:
+                        mask_path = os.path.join(
+                            self.mask_file, f'mask_{mask_id}.jpg')
+                        if os.path.exists(mask_path):
+                            mask = mmcv.imread(mask_path, 'unchanged')
+                            img = self.put_mask_on_img(img, mask)
+            new_imgs.append(img)
+
+        results['img'] = new_imgs
+        return results
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += f'(occlusion_level={self.occlusion_level})'
+        return repr_str
