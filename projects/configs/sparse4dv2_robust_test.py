@@ -30,6 +30,7 @@ _base_ = ['./sparse4dv2_r50_HInf_256x704.py']
 # ================== Override test data config ========================
 data = dict(
     test=dict(
+        ann_file='data/nuscenes/nuscenes2d_temporal_infos_val.pkl',
         # ===== Robustness test parameters =====
         noise_nuscenes_ann_file='',
         extrinsics_noise=False,

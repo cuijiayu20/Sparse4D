@@ -58,6 +58,7 @@ test_pipeline = [
 
 data = dict(
     test=dict(
+        ann_file='data/nuscenes/nuscenes2d_temporal_infos_val.pkl',
         pipeline=test_pipeline,
     ),
 )
