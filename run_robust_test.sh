@@ -70,14 +70,14 @@ run_test() {
             ${CHECKPOINT} \
             ${gpu_num} \
             --eval bbox \
-            --work-dir ${result_dir} \
+            --eval-options jsonfile_prefix=${result_dir} \
             ${cfg_options:+--cfg-options ${cfg_options}}
     else
         python ./tools/test.py \
             ${config} \
             ${CHECKPOINT} \
             --eval bbox \
-            --work-dir ${result_dir} \
+            --eval-options jsonfile_prefix=${result_dir} \
             ${cfg_options:+--cfg-options ${cfg_options}}
     fi
 
