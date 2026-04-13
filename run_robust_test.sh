@@ -53,12 +53,16 @@ run_test() {
 
     local result_dir="${RESULT_DIR}/${result_name}"
     mkdir -p ${result_dir}
+    
+    # 随机分配端口号，防止多卡 DDP 训练时的 Address already in use (errno: 98) 报错
+    export PORT=$((29000 + RANDOM % 1000))
 
     echo "=========================================="
     echo "[TEST] ${result_name}"
     echo "  Config: ${config}"
     echo "  Checkpoint: ${CHECKPOINT}"
     echo "  Result dir: ${result_dir}"
+    echo "  DDP Port: ${PORT}"
     if [ -n "$cfg_options" ]; then
         echo "  Options: ${cfg_options}"
     fi
