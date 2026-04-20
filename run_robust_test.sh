@@ -143,17 +143,20 @@ run_occlusion_tests() {
     echo "# Running Occlusion Tests (exp1,2,3,5)"
     echo "############################################"
 
+    # exp0 (S0 baseline, power=0, 无遮挡)
+    run_test ${CONFIG_OCCLUSION} "occlusion_exp0" "data.test.pipeline.1.occlusion_level=0"
+
     # exp1 (S1 轻微遮挡, power=1)
-    run_test ${CONFIG_OCCLUSION} "occlusion_exp1" "occlusion_level=1"
+    run_test ${CONFIG_OCCLUSION} "occlusion_exp1" "data.test.pipeline.1.occlusion_level=1"
 
     # exp2 (S2 中等遮挡, power=2)
-    run_test ${CONFIG_OCCLUSION} "occlusion_exp2" "occlusion_level=2"
+    run_test ${CONFIG_OCCLUSION} "occlusion_exp2" "data.test.pipeline.1.occlusion_level=2"
 
     # exp3 (S3 严重遮挡, power=3)
-    run_test ${CONFIG_OCCLUSION} "occlusion_exp3" "occlusion_level=3"
+    run_test ${CONFIG_OCCLUSION} "occlusion_exp3" "data.test.pipeline.1.occlusion_level=3"
 
     # exp5 (S4 极端遮挡, power=5)
-    run_test ${CONFIG_OCCLUSION} "occlusion_exp5" "occlusion_level=5"
+    run_test ${CONFIG_OCCLUSION} "occlusion_exp5" "data.test.pipeline.1.occlusion_level=5"
 }
 
 # ==================== 主流程 ====================

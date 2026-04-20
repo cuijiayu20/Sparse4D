@@ -212,9 +212,13 @@ def main():
     # 5. Occlusion
     all_experiments_data['Occlusion'] = OrderedDict()
     occ_rows = []
-    occ_map = {'occlusion_exp1': 'S1 轻微遮挡', 'occlusion_exp2': 'S2 中等遮挡', 'occlusion_exp3': 'S3 严重遮挡', 'occlusion_exp5': 'S4 极端遮挡'}
-    if baseline_nds:
-        occ_rows.append(['S0 无遮挡', f"{baseline_mAP:.4f}", f"{baseline_nds:.4f}", "N/A", "N/A", "N/A", "N/A"])
+    occ_map = OrderedDict([
+        ('occlusion_exp0', 'S0 无遮挡'),
+        ('occlusion_exp1', 'S1 轻微遮挡'),
+        ('occlusion_exp2', 'S2 中等遮挡'),
+        ('occlusion_exp3', 'S3 严重遮挡'),
+        ('occlusion_exp5', 'S4 极端遮挡'),
+    ])
     for k, v in occ_map.items():
         metrics = load_full_metrics(os.path.join(result_dir, k))
         all_experiments_data['Occlusion'][v] = metrics
